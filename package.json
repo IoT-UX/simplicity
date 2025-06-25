@@ -1,0 +1,13 @@
+{
+  "name": "static-website",
+  "version": "1.0.0",
+  "description": "Static website with HTML, CSS, and JavaScript",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve -s . -l 3000",
+    "start": "npx serve -s . -l 3000"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}
