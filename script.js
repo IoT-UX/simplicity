@@ -237,6 +237,388 @@ document.addEventListener('DOMContentLoaded', function() {
             orb.style.transform = `translate(${Math.sin(scrolled * 0.001) * 20}px, ${scrolled * speed}px)`;
         });
     });
+
+    // Data Playground Functionality
+    let playgroundData = [];
+    let currentChart = null;
+    
+    const playgroundCanvas = document.getElementById('playgroundChart');
+    const playgroundCtx = playgroundCanvas.getContext('2d');
+    
+    // Set canvas size
+    playgroundCanvas.width = 600;
+    playgroundCanvas.height = 400;
+
+    // Color themes
+    const colorThemes = {
+        blue: ['#667eea', '#764ba2'],
+        purple: ['#a855f7', '#ec4899'],
+        green: ['#10b981', '#059669'],
+        orange: ['#f59e0b', '#ea580c'],
+        red: ['#ef4444', '#dc2626']
+    };
+
+    // Sample data sets
+    const sampleData = {
+        sales: [
+            { label: 'Q1', value: 45000 },
+            { label: 'Q2', value: 52000 },
+            { label: 'Q3', value: 48000 },
+            { label: 'Q4', value: 61000 }
+        ],
+        population: [
+            { label: 'Asia', value: 4641 },
+            { label: 'Africa', value: 1340 },
+            { label: 'Europe', value: 747 },
+            { label: 'N. America', value: 579 },
+            { label: 'S. America', value: 430 },
+            { label: 'Oceania', value: 45 }
+        ],
+        temperature: [
+            { label: 'Jan', value: 2 },
+            { label: 'Feb', value: 4 },
+            { label: 'Mar', value: 8 },
+            { label: 'Apr', value: 14 },
+            { label: 'May', value: 20 },
+            { label: 'Jun', value: 25 },
+            { label: 'Jul', value: 28 },
+            { label: 'Aug', value: 27 },
+            { label: 'Sep', value: 22 },
+            { label: 'Oct', value: 16 },
+            { label: 'Nov', value: 9 },
+            { label: 'Dec', value: 4 }
+        ],
+        revenue: [
+            { label: 'Product A', value: 125000 },
+            { label: 'Product B', value: 89000 },
+            { label: 'Product C', value: 156000 },
+            { label: 'Product D', value: 73000 },
+            { label: 'Product E', value: 98000 }
+        ]
+    };
+
+    // Input method switching
+    const inputMethodBtns = document.querySelectorAll('.input-method-btn');
+    const inputMethods = document.querySelectorAll('.input-method');
+
+    inputMethodBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            inputMethodBtns.forEach(b => b.classList.remove('active'));
+            inputMethods.forEach(m => m.classList.remove('active'));
+            
+            this.classList.add('active');
+            const method = this.getAttribute('data-method');
+            document.getElementById(method + 'Input').classList.add('active');
+        });
+    });
+
+    // Manual data input
+    const dataEntry = document.querySelector('.data-entry');
+    const addDataPointBtn = document.getElementById('addDataPoint');
+
+    function createEntryRow(label = '', value = '') {
+        const row = document.createElement('div');
+        row.className = 'entry-row';
+        row.innerHTML = `
+            <input type="text" placeholder="Label" class="label-input" value="${label}">
+            <input type="number" placeholder="Value" class="value-input" value="${value}">
+            <button class="remove-btn">×</button>
+        `;
+        
+        row.querySelector('.remove-btn').addEventListener('click', function() {
+            if (dataEntry.children.length > 1) {
+                row.remove();
+            }
+        });
+        
+        return row;
+    }
+
+    // Add initial rows
+    for (let i = 0; i < 4; i++) {
+        dataEntry.appendChild(createEntryRow());
+    }
+
+    addDataPointBtn.addEventListener('click', function() {
+        dataEntry.appendChild(createEntryRow());
+    });
+
+    // Sample data buttons
+    const sampleBtns = document.querySelectorAll('.sample-btn');
+    sampleBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const sampleType = this.getAttribute('data-sample');
+            playgroundData = [...sampleData[sampleType]];
+            updateChart();
+        });
+    });
+
+    // Random data generation
+    const generateRandomBtn = document.getElementById('generateRandom');
+    generateRandomBtn.addEventListener('click', function() {
+        const count = parseInt(document.getElementById('randomCount').value);
+        const minVal = parseInt(document.getElementById('minValue').value);
+        const maxVal = parseInt(document.getElementById('maxValue').value);
+        
+        playgroundData = [];
+        for (let i = 0; i < count; i++) {
+            playgroundData.push({
+                label: `Item ${i + 1}`,
+                value: Math.floor(Math.random() * (maxVal - minVal + 1)) + minVal
+            });
+        }
+        updateChart();
+    });
+
+    // Animation speed control
+    const animationSpeedSlider = document.getElementById('animationSpeed');
+    const speedValue = document.getElementById('speedValue');
+    
+    animationSpeedSlider.addEventListener('input', function() {
+        const speed = this.value / 1000;
+        speedValue.textContent = speed + 's';
+    });
+
+    // Update chart button
+    const updateChartBtn = document.getElementById('updateChart');
+    updateChartBtn.addEventListener('click', function() {
+        // Get manual input data
+        const rows = document.querySelectorAll('.entry-row');
+        playgroundData = [];
+        
+        rows.forEach(row => {
+            const label = row.querySelector('.label-input').value.trim();
+            const value = parseFloat(row.querySelector('.value-input').value);
+            
+            if (label && !isNaN(value)) {
+                playgroundData.push({ label, value });
+            }
+        });
+        
+        if (playgroundData.length > 0) {
+            updateChart();
+        } else {
+            alert('Please enter at least one valid data point');
+        }
+    });
+
+    // Export chart button
+    const exportChartBtn = document.getElementById('exportChart');
+    exportChartBtn.addEventListener('click', function() {
+        const link = document.createElement('a');
+        link.download = 'chart.png';
+        link.href = playgroundCanvas.toDataURL();
+        link.click();
+    });
+
+    // Chart drawing functions
+    function drawBarChart(data, colors, progress = 1) {
+        const padding = 60;
+        const chartWidth = playgroundCanvas.width - padding * 2;
+        const chartHeight = playgroundCanvas.height - padding * 2;
+        const barWidth = chartWidth / data.length;
+        const maxValue = Math.max(...data.map(d => d.value));
+
+        data.forEach((item, index) => {
+            const barHeight = (item.value / maxValue) * chartHeight * progress;
+            const x = padding + index * barWidth + barWidth * 0.2;
+            const y = playgroundCanvas.height - padding - barHeight;
+            const width = barWidth * 0.6;
+
+            // Create gradient
+            const gradient = playgroundCtx.createLinearGradient(0, y, 0, y + barHeight);
+            gradient.addColorStop(0, colors[0]);
+            gradient.addColorStop(1, colors[1]);
+
+            playgroundCtx.fillStyle = gradient;
+            playgroundCtx.fillRect(x, y, width, barHeight);
+
+            // Draw labels
+            playgroundCtx.fillStyle = '#666';
+            playgroundCtx.font = '12px Inter';
+            playgroundCtx.textAlign = 'center';
+            playgroundCtx.fillText(item.label, x + width / 2, playgroundCanvas.height - padding + 20);
+            
+            // Draw values
+            playgroundCtx.fillStyle = '#333';
+            playgroundCtx.font = 'bold 10px Inter';
+            playgroundCtx.fillText(item.value, x + width / 2, y - 5);
+        });
+    }
+
+    function drawLineChart(data, colors, progress = 1) {
+        const padding = 60;
+        const chartWidth = playgroundCanvas.width - padding * 2;
+        const chartHeight = playgroundCanvas.height - padding * 2;
+        const maxValue = Math.max(...data.map(d => d.value));
+        const minValue = Math.min(...data.map(d => d.value));
+        const valueRange = maxValue - minValue;
+
+        // Draw line
+        playgroundCtx.strokeStyle = colors[0];
+        playgroundCtx.lineWidth = 3;
+        playgroundCtx.beginPath();
+
+        data.forEach((item, index) => {
+            const x = padding + (index / (data.length - 1)) * chartWidth;
+            const y = padding + chartHeight - ((item.value - minValue) / valueRange) * chartHeight * progress;
+            
+            if (index === 0) {
+                playgroundCtx.moveTo(x, y);
+            } else {
+                playgroundCtx.lineTo(x, y);
+            }
+        });
+        playgroundCtx.stroke();
+
+        // Draw points
+        data.forEach((item, index) => {
+            const x = padding + (index / (data.length - 1)) * chartWidth;
+            const y = padding + chartHeight - ((item.value - minValue) / valueRange) * chartHeight * progress;
+            
+            playgroundCtx.fillStyle = colors[1];
+            playgroundCtx.beginPath();
+            playgroundCtx.arc(x, y, 5, 0, Math.PI * 2);
+            playgroundCtx.fill();
+
+            // Draw labels
+            playgroundCtx.fillStyle = '#666';
+            playgroundCtx.font = '12px Inter';
+            playgroundCtx.textAlign = 'center';
+            playgroundCtx.fillText(item.label, x, playgroundCanvas.height - padding + 20);
+        });
+    }
+
+    function drawPieChart(data, colors, progress = 1) {
+        const centerX = playgroundCanvas.width / 2;
+        const centerY = playgroundCanvas.height / 2;
+        const radius = Math.min(centerX, centerY) - 80;
+        const total = data.reduce((sum, item) => sum + item.value, 0);
+        
+        let currentAngle = -Math.PI / 2;
+        
+        data.forEach((item, index) => {
+            const sliceAngle = (item.value / total) * Math.PI * 2 * progress;
+            
+            // Generate color variations
+            const hue = (index * 360 / data.length) % 360;
+            const color = `hsl(${hue}, 70%, 60%)`;
+            
+            playgroundCtx.fillStyle = color;
+            playgroundCtx.beginPath();
+            playgroundCtx.moveTo(centerX, centerY);
+            playgroundCtx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+            playgroundCtx.closePath();
+            playgroundCtx.fill();
+            
+            // Draw labels
+            const labelAngle = currentAngle + sliceAngle / 2;
+            const labelX = centerX + Math.cos(labelAngle) * (radius + 30);
+            const labelY = centerY + Math.sin(labelAngle) * (radius + 30);
+            
+            playgroundCtx.fillStyle = '#333';
+            playgroundCtx.font = '12px Inter';
+            playgroundCtx.textAlign = 'center';
+            playgroundCtx.fillText(item.label, labelX, labelY);
+            playgroundCtx.fillText(`${((item.value / total) * 100).toFixed(1)}%`, labelX, labelY + 15);
+            
+            currentAngle += sliceAngle;
+        });
+    }
+
+    function drawScatterPlot(data, colors, progress = 1) {
+        const padding = 60;
+        const chartWidth = playgroundCanvas.width - padding * 2;
+        const chartHeight = playgroundCanvas.height - padding * 2;
+        const maxValue = Math.max(...data.map(d => d.value));
+        const minValue = Math.min(...data.map(d => d.value));
+
+        data.forEach((item, index) => {
+            const x = padding + (index / (data.length - 1)) * chartWidth;
+            const y = padding + chartHeight - ((item.value - minValue) / (maxValue - minValue)) * chartHeight;
+            const size = 8 * progress;
+            
+            // Create gradient
+            const gradient = playgroundCtx.createRadialGradient(x, y, 0, x, y, size);
+            gradient.addColorStop(0, colors[0]);
+            gradient.addColorStop(1, colors[1]);
+            
+            playgroundCtx.fillStyle = gradient;
+            playgroundCtx.beginPath();
+            playgroundCtx.arc(x, y, size, 0, Math.PI * 2);
+            playgroundCtx.fill();
+
+            // Draw labels
+            playgroundCtx.fillStyle = '#666';
+            playgroundCtx.font = '10px Inter';
+            playgroundCtx.textAlign = 'center';
+            playgroundCtx.fillText(item.label, x, playgroundCanvas.height - padding + 20);
+        });
+    }
+
+    function updateChart() {
+        if (playgroundData.length === 0) return;
+
+        const chartType = document.getElementById('chartType').value;
+        const colorTheme = document.getElementById('chartColor').value;
+        const animationSpeed = parseInt(document.getElementById('animationSpeed').value);
+        const colors = colorThemes[colorTheme];
+
+        // Update chart info
+        const values = playgroundData.map(d => d.value);
+        document.getElementById('dataCount').textContent = playgroundData.length;
+        document.getElementById('maxVal').textContent = Math.max(...values).toLocaleString();
+        document.getElementById('minVal').textContent = Math.min(...values).toLocaleString();
+        document.getElementById('avgVal').textContent = Math.round(values.reduce((a, b) => a + b, 0) / values.length).toLocaleString();
+
+        // Animate chart
+        let progress = 0;
+        const startTime = Date.now();
+
+        function animateChart() {
+            const elapsed = Date.now() - startTime;
+            progress = Math.min(elapsed / animationSpeed, 1);
+
+            playgroundCtx.clearRect(0, 0, playgroundCanvas.width, playgroundCanvas.height);
+
+            // Draw axes for bar and line charts
+            if (chartType === 'bar' || chartType === 'line' || chartType === 'scatter') {
+                playgroundCtx.strokeStyle = '#e2e8f0';
+                playgroundCtx.lineWidth = 2;
+                playgroundCtx.beginPath();
+                playgroundCtx.moveTo(60, 60);
+                playgroundCtx.lineTo(60, playgroundCanvas.height - 60);
+                playgroundCtx.lineTo(playgroundCanvas.width - 60, playgroundCanvas.height - 60);
+                playgroundCtx.stroke();
+            }
+
+            // Draw chart based on type
+            switch (chartType) {
+                case 'bar':
+                    drawBarChart(playgroundData, colors, progress);
+                    break;
+                case 'line':
+                    drawLineChart(playgroundData, colors, progress);
+                    break;
+                case 'pie':
+                    drawPieChart(playgroundData, colors, progress);
+                    break;
+                case 'scatter':
+                    drawScatterPlot(playgroundData, colors, progress);
+                    break;
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(animateChart);
+            }
+        }
+
+        animateChart();
+    }
+
+    // Initialize with sample data
+    playgroundData = [...sampleData.sales];
+    updateChart();
 });
 
 // Utility function for smooth scrolling
